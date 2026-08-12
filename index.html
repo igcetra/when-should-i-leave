@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="When Should I Leave">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <title>When Should I Leave?</title>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #f5f7ff; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const Ico = ({ d, size = 14 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {Array.isArray(d) ? d.map((p,i) => <path key={i} d={p}/>) : <path d={d}/>}
+      </svg>
+    );
+
+    const I = {
+      plane:   "M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z",
+      car:     ["M3 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0","M15 17a2 2 0 1 0 4 0 2 2 0 0 0-4 0","M1 17V9a4 4 0 0 1 4-4h9l4 5h1a2 2 0 0 1 2 2v5","M7 17h8"],
+      pin:     ["M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7z","M12 9m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0"],
+      flag:    ["M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z","M4 22v-7"],
+      nav:     "M3 11 22 2 13 21 11 13 3 11",
+      book:    "M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z",
+      cal:     ["M8 2v4","M16 2v4","M3 10h18","M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"],
+      trash:   ["M3 6h18","M8 6V4h8v2","M19 6l-1 14H6L5 6"],
+      check:   "M20 6L9 17l-5-5",
+      refresh: ["M1 4v6h6","M23 20v-6h-6","M20.49 9A9 9 0 0 0 5.64 5.64L1 10","M23 14l-4.64 4.36A9 9 0 0 1 3.51 15"],
+    };
+
+    const fmt = (date) => {
+      if (!date || isNaN(date)) return "";
+      return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    };
+
+    const fmtDate = (date) => {
+      if (!date) return "";
+      const today = new Date(); today.setHours(0,0,0,0);
+      const d = new Date(date); d.setHours(0,0,0,0);
+      const diff = Math.round((d - today) / 86400000);
+      if (diff === 0) return "Today";
+      if (diff === 1) return "Tomorrow";
+      return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    };
+
+    const Dot = ({ color, icon, size=11 }) => (
+      <div style={{ width: 24, height: 24, borderRadius: "50%", background: color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "white", zIndex: 2, position: "relative" }}>
+        <Ico d={I[icon]} size={size} />
+      </div>
+    );
+
+    function App() {
+      const [tab, setTab] = useState("plan");
+      const [flightNumber, setFlightNumber] = useState("");
+      const [flightType, setFlightType] = useState("domestic");
+      const [flightTime, setFlightTime] = useState("");
+      const [flightDate, setFlightDate] = useState(new Date());
+      const [travelMode, setTravelMode] = useState(null);
+      const [travelTime, setTravelTime] = useState("");
+      const [locationDetected, setLocationDetected] = useState(false);
+      const [travelOptions, setTravelOptions] = useState(null);
+      const [securityTime, setSecurityTime] = useState("25");
+      const [gateTime, setGateTime] = useState("10");
+      const [extraTime, setExtraTime] = useState("15");
+      const [result, setResult] = useState(null);
+      const [savedFlights, setSavedFlights] = useState([]);
+      const [countdown, setCountdown] = useState(null);
+
+      const boardingOffset = flightType === "domestic" ? 30 : 45;
+
+      const getBoardingTime = () => {
+        if (!flightTime) return null;
+        const [h, m] = flightTime.split(":").map(Number);
+        const d = new Date(flightDate);
+        d.setHours(h, m, 0, 0);
+        return new Date(d.getTime() - boardingOffset * 60000);
+      };
+
+      const boardingTime = getBoardingTime();
+
+      const isToday = () => {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const d = new Date(flightDate); d.setHours(0,0,0,0);
+        return today.getTime() === d.getTime();
+      };
+
+      useEffect(() => {
+        if (!result || !isToday()) { setCountdown(null); return; }
+        const tick = () => {
+          const diff = result.departureTime - new Date();
+          if (diff <= 0) { setCountdown("Time to go!"); return; }
+          const h = Math.floor(diff / 3600000);
+          const m = Math.floor((diff % 3600000) / 60000);
+          const s = Math.floor((diff % 60000) / 1000);
+          setCountdown(`${h > 0 ? h + "h " : ""}${m}m ${s}s`);
+        };
+        tick();
+        const id = setInterval(tick, 1000);
+        return () => clearInterval(id);
+      }, [result, flightDate]);
+
+      const requestLocation = () => {
+        if (!navigator.geolocation) { alert("Geolocation not supported"); return; }
+        navigator.geolocation.getCurrentPosition(
+          () => {
+            const car = 30 + Math.floor(Math.random() * 20);
+            setTravelOptions({ car, transit: car + 10 + Math.floor(Math.random() * 15) });
+            setLocationDetected(true);
+          },
+          () => alert("Unable to get location. Enter travel time manually.")
+        );
+      };
+
+      const selectMode = (mode) => {
+        setTravelMode(mode);
+        setTravelTime(String(travelOptions[mode]));
+      };
+
+      const totalMins = () => [travelTime, securityTime, gateTime, extraTime].reduce((s,v) => s + (parseInt(v)||0), 0);
+
+      const calculate = () => {
+        if (!flightTime || !travelTime) { alert("Please fill in flight time and travel time"); return; }
+        const bt = getBoardingTime();
+        const [h, m] = flightTime.split(":").map(Number);
+        const ft = new Date(flightDate); ft.setHours(h, m, 0, 0);
+        const dep = new Date(bt.getTime() - totalMins() * 60000);
+        setResult({ departureTime: dep, boardingTime: bt, flightTime: ft });
+      };
+
+      const reset = () => {
+        setFlightNumber(""); setFlightType("domestic"); setFlightTime(""); setFlightDate(new Date());
+        setTravelMode(null); setTravelTime(""); setLocationDetected(false); setTravelOptions(null);
+        setSecurityTime("25"); setGateTime("10"); setExtraTime("15"); setResult(null); setCountdown(null);
+      };
+
+      const addToCalendar = () => {
+        if (!result) return;
+        const start = result.departureTime;
+        const end = new Date(start.getTime() + 60 * 60000);
+        const pad = n => String(n).padStart(2, "0");
+        const f = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+        const ics = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nDTSTART:${f(start)}\nDTEND:${f(end)}\nSUMMARY:Leave for airport${flightNumber ? " – "+flightNumber : ""}\nDESCRIPTION:Leave by ${fmt(start)} to catch your ${fmt(result.flightTime)} flight\nEND:VEVENT\nEND:VCALENDAR`;
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([ics], {type:"text/calendar"})); a.download = "leave-for-airport.ics"; a.click();
+      };
+
+      const saveFlight = () => {
+        if (!result) return;
+        setSavedFlights(f => [...f, { id: Date.now(), number: flightNumber || "Flight", flightTime, flightDate: new Date(flightDate), departureTime: result.departureTime, flightType }]);
+        setTab("saved");
+      };
+
+      const inp = { width: "100%", padding: "9px 11px", border: "1.5px solid #e5e7eb", borderRadius: 10, fontSize: 13, outline: "none", background: "white", color: "#111", fontFamily: "inherit" };
+      const lbl = { fontSize: 10, color: "#9ca3af", marginBottom: 3, display: "block", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" };
+
+      const dateOptions = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() + i); return d; });
+
+      const timelineSteps = result ? [
+        ["🏠", "Leave", result.departureTime],
+        ["🚗", "Arrive airport", new Date(result.departureTime.getTime() + (parseInt(travelTime)||0)*60000)],
+        ["🛂", "Through security", new Date(result.departureTime.getTime() + ((parseInt(travelTime)||0)+(parseInt(securityTime)||0))*60000)],
+        ["🚶", "At gate & boarding", result.boardingTime],
+        ["✈️", "Departure", result.flightTime],
+      ] : [];
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#f5f7ff", display: "flex", flexDirection: "column" }}>
+          <div style={{ flex: 1, maxWidth: 420, margin: "0 auto", width: "100%", padding: "20px 14px 90px" }}>
+
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ width: 46, height: 46, borderRadius: "50%", background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", color: "white" }}>
+                <Ico d={I.plane} size={20} />
+              </div>
+              <h1 style={{ fontSize: 20, fontWeight: 700, color: "#111", margin: "0 0 2px" }}>When Should I Leave?</h1>
+              <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>Never miss your flight</p>
+            </div>
+
+            {tab === "plan" && (
+              <>
+                <div style={{ background: "white", borderRadius: 18, border: "1px solid #ebebeb", padding: "20px 16px", position: "relative" }}>
+                  <div style={{ position: "absolute", left: 27, top: 68, bottom: 110, width: 2, background: "linear-gradient(to bottom, #bfdbfe 0%, #e9d5ff 50%, #fbcfe8 100%)", borderRadius: 2, zIndex: 0 }} />
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+                    {/* Flight details */}
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <Dot color="#2563eb" icon="plane" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Flight details</span>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {["domestic", "international"].map(t => (
+                              <button key={t} onClick={() => setFlightType(t)} style={{ padding: "3px 9px", fontSize: 10, borderRadius: 20, border: "none", cursor: "pointer", fontWeight: 600, background: flightType === t ? "#2563eb" : "#f3f4f6", color: flightType === t ? "white" : "#9ca3af" }}>
+                                {t === "domestic" ? "Domestic" : "International"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 10 }}>
+                          {dateOptions.map((d, i) => {
+                            const sel = d.toDateString() === flightDate.toDateString();
+                            return (
+                              <button key={i} onClick={() => setFlightDate(d)} style={{ padding: "5px 2px", borderRadius: 8, border: sel ? "2px solid #2563eb" : "1.5px solid #e5e7eb", background: sel ? "#eff6ff" : "white", cursor: "pointer", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <span style={{ fontSize: 8, color: sel ? "#2563eb" : "#9ca3af", fontWeight: 600, textTransform: "uppercase", lineHeight: 1.2 }}>{i === 0 ? "Today" : d.toLocaleDateString("en-US", { weekday: "short" })}</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: sel ? "#2563eb" : "#374151", lineHeight: 1.3 }}>{d.getDate()}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                          <div>
+                            <label style={lbl}>Flight # (optional)</label>
+                            <input style={inp} value={flightNumber} onChange={e => setFlightNumber(e.target.value)} placeholder="AA123" />
+                          </div>
+                          <div>
+                            <label style={lbl}>Departure time</label>
+                            <input style={inp} type="time" value={flightTime} onChange={e => setFlightTime(e.target.value)} />
+                          </div>
+                        </div>
+                        {boardingTime && (
+                          <p style={{ fontSize: 10, color: "#6b7280", marginTop: 6, display: "flex", alignItems: "center", gap: 3 }}>
+                            <Ico d={I.check} size={10} /> Boarding at {fmt(boardingTime)} · {boardingOffset} min before departure
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Travel */}
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <Dot color="#7c3aed" icon="car" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 10 }}>Travel to airport</span>
+                        <div style={{ display: "flex", gap: 7 }}>
+                          <div style={{ flex: 1 }}>
+                            <input style={inp} type="number" value={travelTime} onChange={e => { setTravelTime(e.target.value); setLocationDetected(false); setTravelOptions(null); setTravelMode(null); }} placeholder="Travel time in minutes" />
+                          </div>
+                          <button onClick={requestLocation} style={{ padding: "9px 11px", background: "#2563eb", border: "none", borderRadius: 10, cursor: "pointer", color: "white", display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
+                            <Ico d={I.nav} size={12} /> Locate
+                          </button>
+                        </div>
+                        {locationDetected && travelOptions && (
+                          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>
+                            {[{ key: "car", label: "Drive", icon: "🚗" }, { key: "transit", label: "Transit", icon: "🚇" }].map(({ key, label, icon }) => (
+                              <button key={key} onClick={() => selectMode(key)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 11px", borderRadius: 9, border: travelMode === key ? "2px solid #2563eb" : "1.5px solid #e5e7eb", background: travelMode === key ? "#eff6ff" : "#fafafa", cursor: "pointer" }}>
+                                <span style={{ fontSize: 12, fontWeight: 500, color: "#374151" }}>{icon} {label}</span>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: travelMode === key ? "#2563eb" : "#374151" }}>{travelOptions[key]} min</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* At Airport */}
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <Dot color="#db2777" icon="pin" />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#374151", display: "block", marginBottom: 10 }}>At airport</span>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7 }}>
+                          {[["Security", securityTime, setSecurityTime, "25"], ["Walk to gate", gateTime, setGateTime, "10"], ["Buffer", extraTime, setExtraTime, "15"]].map(([label, val, set, ph]) => (
+                            <div key={label}>
+                              <label style={lbl}>{label}</label>
+                              <input style={inp} type="number" value={val} onChange={e => set(e.target.value)} placeholder={ph} />
+                            </div>
+                          ))}
+                        </div>
+                        <p style={{ fontSize: 10, color: "#9ca3af", marginTop: 6 }}>All in minutes</p>
+                      </div>
+                    </div>
+
+                    {/* Bon Voyage */}
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 4 }}>
+                      <Dot color="#10b981" icon="flag" size={11} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#10b981" }}>Bon voyage!</span>
+                    </div>
+
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10, marginTop: 22 }}>
+                    <button onClick={reset} style={{ padding: "8px 14px", background: "#f3f4f6", border: "none", borderRadius: 9, cursor: "pointer", color: "#6b7280", fontSize: 12, fontWeight: 500, display: "flex", alignItems: "center", gap: 4 }}>
+                      <Ico d={I.refresh} size={12} /> Reset
+                    </button>
+                    <button onClick={calculate} style={{ padding: "10px 28px", background: "#2563eb", color: "white", border: "none", borderRadius: 11, fontSize: 13, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 8px rgba(37,99,235,0.25)" }}>
+                      Calculate
+                    </button>
+                  </div>
+                </div>
+
+                {result && (
+                  <div style={{ marginTop: 12, borderRadius: 18, background: "linear-gradient(135deg, #1d4ed8, #1e40af)", padding: "20px 16px", color: "white" }}>
+                    <div style={{ textAlign: "center", marginBottom: 14 }}>
+                      <p style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", opacity: 0.7, margin: "0 0 2px" }}>Leave by</p>
+                      <p style={{ fontSize: 50, fontWeight: 800, margin: "0 0 2px", lineHeight: 1 }}>{fmt(result.departureTime)}</p>
+                      <p style={{ fontSize: 11, opacity: 0.7, margin: "0 0 4px" }}>{fmtDate(flightDate)} · {fmt(result.flightTime)} flight</p>
+                      <p style={{ fontSize: 11, opacity: 0.6, margin: 0 }}>Total journey: {totalMins()} min</p>
+                    </div>
+
+                    {countdown && (
+                      <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 11, padding: "9px 13px", textAlign: "center", marginBottom: 10 }}>
+                        <p style={{ fontSize: 9, opacity: 0.6, margin: "0 0 1px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Time until you leave</p>
+                        <p style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{countdown}</p>
+                      </div>
+                    )}
+
+                    {!isToday() && (
+                      <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 11, padding: "8px 13px", textAlign: "center", marginBottom: 10 }}>
+                        <p style={{ fontSize: 11, opacity: 0.75, margin: 0 }}>Countdown starts on {fmtDate(flightDate)}</p>
+                      </div>
+                    )}
+
+                    <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 11, padding: "10px 13px", marginBottom: 10 }}>
+                      {timelineSteps.map(([icon, label, time], i, arr) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: i < arr.length-1 ? "1px solid rgba(255,255,255,0.08)" : "none" }}>
+                          <span style={{ fontSize: 11, opacity: 0.85 }}>{icon} {label}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{fmt(time)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display: "flex", gap: 7 }}>
+                      <button onClick={addToCalendar} style={{ flex: 1, padding: "9px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 9, color: "white", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                        <Ico d={I.cal} size={12} /> Add to Calendar
+                      </button>
+                      <button onClick={saveFlight} style={{ flex: 1, padding: "9px", background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 9, color: "white", fontSize: 11, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                        <Ico d={I.book} size={12} /> Save flight
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {tab === "saved" && (
+              <div>
+                <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111", margin: "0 0 12px" }}>Saved flights</h2>
+                {savedFlights.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "50px 20px", color: "#9ca3af" }}>
+                    <div style={{ marginBottom: 10, opacity: 0.3, display: "flex", justifyContent: "center" }}><Ico d={I.plane} size={36} /></div>
+                    <p style={{ fontSize: 13, fontWeight: 500, margin: "0 0 4px", color: "#6b7280" }}>No saved flights yet</p>
+                    <p style={{ fontSize: 12, margin: 0 }}>Calculate a flight and tap "Save flight"</p>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {savedFlights.map(f => (
+                      <div key={f.id} style={{ background: "white", border: "1px solid #ebebeb", borderRadius: 14, padding: "13px 14px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "0 0 1px" }}>{f.number}</p>
+                            <p style={{ fontSize: 11, color: "#9ca3af", margin: "0 0 8px" }}>{fmtDate(f.flightDate)} · {f.flightType}</p>
+                            <div style={{ display: "flex", gap: 14 }}>
+                              <div>
+                                <p style={{ fontSize: 9, color: "#9ca3af", margin: "0 0 1px", textTransform: "uppercase", fontWeight: 600 }}>Leave by</p>
+                                <p style={{ fontSize: 17, fontWeight: 700, color: "#2563eb", margin: 0 }}>{fmt(f.departureTime)}</p>
+                              </div>
+                              <div>
+                                <p style={{ fontSize: 9, color: "#9ca3af", margin: "0 0 1px", textTransform: "uppercase", fontWeight: 600 }}>Flight</p>
+                                <p style={{ fontSize: 17, fontWeight: 700, color: "#374151", margin: 0 }}>{f.flightTime}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <button onClick={() => setSavedFlights(s => s.filter(x => x.id !== f.id))} style={{ background: "#fef2f2", border: "none", borderRadius: 7, padding: "5px 7px", cursor: "pointer", color: "#ef4444" }}>
+                            <Ico d={I.trash} size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #ebebeb", display: "flex", justifyContent: "center", padding: "8px 0 18px" }}>
+            <div style={{ display: "flex", maxWidth: 420, width: "100%" }}>
+              {[["plan", "plane", "Plan"], ["saved", "book", "Saved"]].map(([id, icon, label]) => (
+                <button key={id} onClick={() => setTab(id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: "none", border: "none", cursor: "pointer", padding: "5px 0", color: tab === id ? "#2563eb" : "#9ca3af" }}>
+                  <Ico d={I[icon]} size={18} />
+                  <span style={{ fontSize: 10, fontWeight: 600 }}>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
