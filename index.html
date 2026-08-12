@@ -181,7 +181,7 @@ function App() {
 
   return (
     <div style={{minHeight:"100vh",background:"#f5f7ff",display:"flex",flexDirection:"column"}}>
-      <div style={{flex:1,maxWidth:420,margin:"0 auto",width:"100%",padding:"24px 16px 100px",boxSizing:"border-box"}}>
+      <div style={{flex:1,maxWidth:480,margin:"0 auto",width:"100%",padding:"24px 20px 100px",boxSizing:"border-box"}}>
 
         {/* Header */}
         <div style={{textAlign:"center",marginBottom:24}}>
@@ -278,10 +278,10 @@ function App() {
                   <Dot color="#db2777" icon="pin"/>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{...sec,marginBottom:12}}>At airport</p>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
                       {[["Security",securityTime,setSecurityTime,"25"],["Walk to gate",gateTime,setGateTime,"10"],["Buffer",extraTime,setExtraTime,"15"]].map(([label,val,set,ph])=>(
                         <div key={label}>
-                          <label style={lbl}>{label}</label>
+                          <label style={{...lbl,whiteSpace:"nowrap"}}>{label}</label>
                           <input style={inp} type="number" value={val} onChange={e=>set(e.target.value)} placeholder={ph}/>
                         </div>
                       ))}
